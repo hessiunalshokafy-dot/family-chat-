@@ -19,7 +19,7 @@ body{font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",system-ui,sans-serif;back
 #auth h1{font-size:34px;margin:0 0 6px}
 #auth p{color:var(--muted);margin:0 0 24px}
 input,button{font:inherit}
-input{width:100%;padding:14px;margin-bottom:12px;border:1.5px solid var(--line);border-radius:12px;background:var(--other);color:var(--ink)}
+input[type=text],input[type=email],input[type=password],#txt{width:100%;padding:14px;margin-bottom:12px;border:1.5px solid var(--line);border-radius:12px;background:var(--other);color:var(--ink)}
 input:focus{outline:2px solid var(--mine);border-color:transparent}
 button{border:0;border-radius:12px;cursor:pointer}
 #go{width:100%;padding:14px;background:var(--mine);color:var(--mine-ink);font-weight:700}
@@ -35,17 +35,24 @@ header b{font-size:20px}
 .m small{display:block;color:var(--muted);font-size:13px;margin-bottom:2px}
 .m.me small{display:none}
 .m time{display:block;font-size:11px;opacity:.6;margin-top:3px}
+.m img.p{display:block;max-width:100%;border-radius:10px;margin:2px 0;cursor:zoom-in}
+.m.st{background:none;padding:0;color:var(--muted)}
+.m.st img.p{width:140px;height:auto;cursor:default}
+.del{background:none;color:inherit;opacity:.65;font-size:12px;padding:2px 0 0;text-decoration:underline}
 #empty{margin:auto;color:var(--muted)}
-form{display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg)}
-form input{margin:0;flex:1}
-#send{background:var(--mine);color:var(--mine-ink);padding:0 20px;font-weight:700}
+form{display:flex;align-items:center;gap:6px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg)}
+#txt{margin:0;flex:1}
+.tool{background:none;font-size:24px;padding:0 4px;color:var(--ink)}
+#send{background:var(--mine);color:var(--mine-ink);padding:12px 18px;font-weight:700}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:9;cursor:zoom-out}
+#lb img{max-width:95%;max-height:95%}
 </style>
 </head>
 <body>
 <section id="auth" class="hidden">
   <h1>شات العيلة</h1>
   <p>سجّل دخولك عشان تكلّم العيلة.</p>
-  <input id="name" class="hidden" placeholder="اسمك (يظهر للعيلة)" autocomplete="nickname">
+  <input id="name" type="text" class="hidden" placeholder="اسمك (يظهر للعيلة)" autocomplete="nickname">
   <input id="email" type="email" placeholder="البريد الإلكتروني" autocomplete="email" dir="ltr">
   <input id="pass" type="password" placeholder="كلمة السر (6 حروف على الأقل)" autocomplete="current-password" dir="ltr">
   <div id="err"></div>
@@ -57,106 +64,20 @@ form input{margin:0;flex:1}
   <header><b>شات العيلة</b><button id="out">خروج</button></header>
   <div id="list"><div id="empty">مفيش رسايل لسه. ابدأ إنت. 👋</div></div>
   <form id="f">
-    <input id="txt" placeholder="اكتب رسالة" autocomplete="off" maxlength="1900">
+    <button type="button" class="tool" id="picBtn" title="صورة">📷</button>
+    <button type="button" class="tool" id="stBtn" title="استيكر">😊</button>
+    <input id="txt" type="text" placeholder="اكتب رسالة" autocomplete="off" maxlength="1900">
     <button id="send">إرسال</button>
   </form>
+  <input id="pic" type="file" accept="image/*" class="hidden">
+  <input id="st" type="file" accept="image/*" class="hidden">
 </section>
+<div id="lb" class="hidden"><img alt=""></div>
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,updateProfile,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {getFirestore,collection,addDoc,query,orderBy,limit,onSnapshot,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getFirestore,collection,addDoc,deleteDoc,doc,query,orderBy,limit,onSnapshot,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-        apiKey: "AIzaSyCiTdy28haNh_57OJGBaYwPS6HvJpBMJvI",
-  authDomain: "family-chat-7de47.firebaseapp.com",
-  projectId: "family-chat-7de47",
-  storageBucket: "family-chat-7de47.firebasestorage.app",
-  messagingSenderId: "810876639709",
-  appId: "1:810876639709:web:0797f5e778b11437cfbe34"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const $ = id => document.getElementById(id);
-let signup = false, unsub = null;
-
-$("switch").onclick = () => {
-  signup = !signup;
-  $("name").classList.toggle("hidden", !signup);
-  $("go").textContent = signup ? "سجّل حساب" : "دخول";
-  $("switch").textContent = signup ? "عندي حساب، دخول" : "معنديش حساب، سجّل حساب جديد";
-  $("pass").autocomplete = signup ? "new-password" : "current-password";
-  $("err").textContent = "";
-};
-
-const errs = {
-  "auth/invalid-email":"البريد الإلكتروني مش صح.",
-  "auth/invalid-credential":"البريد أو كلمة السر غلط.",
-  "auth/email-already-in-use":"البريد ده مسجّل قبل كده. جرّب الدخول.",
-  "auth/weak-password":"كلمة السر ضعيفة. اكتب 6 حروف على الأقل.",
-  "auth/network-request-failed":"مفيش إنترنت. جرّب تاني.",
-  "auth/unauthorized-domain":"الموقع ده مش مضاف في Firebase (Authorized domains).",
-  "auth/operation-not-allowed":"تسجيل الحسابات الجديدة مقفول."
-};
-
-$("go").onclick = async () => {
-  $("err").textContent = "";
-  const email = $("email").value.trim(), pass = $("pass").value, name = $("name").value.trim();
-  if (signup && !name) { $("err").textContent = "اكتب اسمك."; return; }
-  try {
-    if (signup) {
-      const c = await createUserWithEmailAndPassword(auth, email, pass);
-      await updateProfile(c.user, {displayName: name});
-      showApp(c.user);
-    } else {
-      await signInWithEmailAndPassword(auth, email, pass);
-    }
-  } catch (e) { $("err").textContent = errs[e.code] || "حصلت مشكلة: " + e.code; }
-};
-
-$("out").onclick = () => signOut(auth);
-
-onAuthStateChanged(auth, user => {
-  if (unsub) { unsub(); unsub = null; }
-  $("auth").classList.toggle("hidden", !!user);
-  $("app").classList.toggle("hidden", !user);
-  if (user) showApp(user);
-});
-
-function showApp(user) {
-  if (unsub) return;
-  const q = query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(100));
-  unsub = onSnapshot(q, snap => {
-    const list = $("list");
-    const stick = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
-    list.innerHTML = "";
-    const docs = snap.docs.map(d => d.data()).reverse();
-    if (!docs.length) list.innerHTML = '<div id="empty">مفيش رسايل لسه. ابدأ إنت. 👋</div>';
-    for (const m of docs) {
-      const el = document.createElement("div");
-      el.className = "m" + (m.uid === user.uid ? " me" : "");
-      const s = document.createElement("small"); s.textContent = m.name || "";
-      const t = document.createElement("span"); t.textContent = m.text;
-      const tm = document.createElement("time");
-      if (m.createdAt) tm.textContent = m.createdAt.toDate().toLocaleTimeString("ar-EG", {hour:"2-digit", minute:"2-digit"});
-      el.append(s, t, tm); list.append(el);
-    }
-    if (stick || snap.metadata.fromCache === false) list.scrollTop = list.scrollHeight;
-  }, e => { $("list").textContent = "مش قادر أقرا الرسايل: " + e.code; });
-}
-
-$("f").onsubmit = async e => {
-  e.preventDefault();
-  const text = $("txt").value.trim();
-  const u = auth.currentUser;
-  if (!text || !u) return;
-  $("txt").value = "";
-  try {
-    await addDoc(collection(db, "messages"), {uid: u.uid, name: u.displayName || "مجهول", text, createdAt: serverTimestamp()});
-  } catch (err) { $("txt").value = text; alert("الرسالة ما اتبعتتش: " + err.code); }
-};
-</script>
-</body>
-</html>
+  apiKey:
