@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>شات العيلة</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f4d45">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#f3efe6;--ink:#1d2b28;--pine:#1f4d45;--mine:#1f4d45;--mine-ink:#f3efe6;--other:#fff;--muted:#6b7a76;--line:#ddd6c6;--err:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#121a18;--ink:#e8efec;--pine:#0f2b26;--mine:#2f7a6b;--mine-ink:#fff;--other:#1e2a27;--muted:#8fa19b;--line:#2a3835}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:17px}
+.hidden{display:none!important}
+#auth{min-height:100%;display:flex;flex-direction:column;justify-content:center;padding:24px;max-width:420px;margin:auto}
+#auth h1{font-size:34px;margin:0 0 6px}
+#auth p{color:var(--muted);margin:0 0 24px}
+input,button{font:inherit}
+input{width:100%;padding:14px;margin-bottom:12px;border:1.5px solid var(--line);border-radius:12px;background:var(--other);color:var(--ink)}
+input:focus{outline:2px solid var(--mine);border-color:transparent}
+button{border:0;border-radius:12px;cursor:pointer}
+#go{width:100%;padding:14px;background:var(--mine);color:var(--mine-ink);font-weight:700}
+#switch{background:none;color:var(--muted);width:100%;padding:14px;text-decoration:underline}
+#err{color:var(--err);min-height:24px;margin:4px 0 8px}
+#app{height:100%;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;background:var(--pine);color:#f3efe6;padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
+header b{font-size:20px}
+#out{background:none;color:#f3efe6;opacity:.8;padding:6px 10px;font-size:15px}
+#list{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:8px}
+.m{max-width:80%;padding:9px 13px;border-radius:16px;background:var(--other);align-self:flex-start;border-end-start-radius:4px;word-wrap:break-word;white-space:pre-wrap}
+.m.me{align-self:flex-end;background:var(--mine);color:var(--mine-ink);border-end-start-radius:16px;border-end-end-radius:4px}
+.m small{display:block;color:var(--muted);font-size:13px;margin-bottom:2px}
+.m.me small{display:none}
+.m time{display:block;font-size:11px;opacity:.6;margin-top:3px}
+#empty{margin:auto;color:var(--muted)}
+form{display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg)}
+form input{margin:0;flex:1}
+#send{background:var(--mine);color:var(--mine-ink);padding:0 20px;font-weight:700}
+</style>
+</head>
+<body>
+<section id="auth" class="hidden">
+  <h1>شات العيلة</h1>
+  <p>سجّل دخولك عشان تكلّم العيلة.</p>
+  <input id="name" class="hidden" placeholder="اسمك (يظهر للعيلة)" autocomplete="nickname">
+  <input id="email" type="email" placeholder="البريد الإلكتروني" autocomplete="email" dir="ltr">
+  <input id="pass" type="password" placeholder="كلمة السر (6 حروف على الأقل)" autocomplete="current-password" dir="ltr">
+  <div id="err"></div>
+  <button id="go">دخول</button>
+  <button id="switch">معنديش حساب، سجّل حساب جديد</button>
+</section>
+
+<section id="app" class="hidden">
+  <header><b>شات العيلة</b><button id="out">خروج</button></header>
+  <div id="list"><div id="empty">مفيش رسايل لسه. ابدأ إنت. 👋</div></div>
+  <form id="f">
+    <input id="txt" placeholder="اكتب رسالة" autocomplete="off" maxlength="1900">
+    <button id="send">إرسال</button>
+  </form>
+</section>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,updateProfile,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,collection,addDoc,query,orderBy,limit,onSnapshot,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCiTdy28haNh_570JGBaYwPS6HvJpBMJvI",
+  authDomain: "family-chat-7de47.firebaseapp.com",
+  projectId: "family-chat-7de47",
+  storageBucket: "family-chat-7de47.firebasestorage.app",
+  messagingSenderId: "810876639709",
+  appId: "1:810876639709:web:0797f5e778b11437cfbe34"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const $ = id => document.getElementById(id);
+let signup = false, unsub = null;
+
+$("switch").onclick = () => {
+  signup = !signup;
+  $("name").classList.toggle("hidden", !signup);
+  $("go").textContent = signup ? "سجّل حساب" : "دخول";
+  $("switch").textContent = signup ? "عندي حساب، دخول" : "معنديش حساب، سجّل حساب جديد";
+  $("pass").autocomplete = signup ? "new-password" : "current-password";
+  $("err").textContent = "";
+};
+
+const errs = {
+  "auth/invalid-email":"البريد الإلكتروني مش صح.",
+  "auth/invalid-credential":"البريد أو كلمة السر غلط.",
+  "auth/email-already-in-use":"البريد ده مسجّل قبل كده. جرّب الدخول.",
+  "auth/weak-password":"كلمة السر ضعيفة. اكتب 6 حروف على الأقل.",
+  "auth/network-request-failed":"مفيش إنترنت. جرّب تاني.",
+  "auth/unauthorized-domain":"الموقع ده مش مضاف في Firebase (Authorized domains).",
+  "auth/operation-not-allowed":"تسجيل الحسابات الجديدة مقفول."
+};
+
+$("go").onclick = async () => {
+  $("err").textContent = "";
+  const email = $("email").value.trim(), pass = $("pass").value, name = $("name").value.trim();
+  if (signup && !name) { $("err").textContent = "اكتب اسمك."; return; }
+  try {
+    if (signup) {
+      const c = await createUserWithEmailAndPassword(auth, email, pass);
+      await updateProfile(c.user, {displayName: name});
+      showApp(c.user);
+    } else {
+      await signInWithEmailAndPassword(auth, email, pass);
+    }
+  } catch (e) { $("err").textContent = errs[e.code] || "حصلت مشكلة: " + e.code; }
+};
+
+$("out").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  if (unsub) { unsub(); unsub = null; }
+  $("auth").classList.toggle("hidden", !!user);
+  $("app").classList.toggle("hidden", !user);
+  if (user) showApp(user);
+});
+
+function showApp(user) {
+  if (unsub) return;
+  const q = query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(100));
+  unsub = onSnapshot(q, snap => {
+    const list = $("list");
+    const stick = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+    list.innerHTML = "";
+    const docs = snap.docs.map(d => d.data()).reverse();
+    if (!docs.length) list.innerHTML = '<div id="empty">مفيش رسايل لسه. ابدأ إنت. 👋</div>';
+    for (const m of docs) {
+      const el = document.createElement("div");
+      el.className = "m" + (m.uid === user.uid ? " me" : "");
+      const s = document.createElement("small"); s.textContent = m.name || "";
+      const t = document.createElement("span"); t.textContent = m.text;
+      const tm = document.createElement("time");
+      if (m.createdAt) tm.textContent = m.createdAt.toDate().toLocaleTimeString("ar-EG", {hour:"2-digit", minute:"2-digit"});
+      el.append(s, t, tm); list.append(el);
+    }
+    if (stick || snap.metadata.fromCache === false) list.scrollTop = list.scrollHeight;
+  }, e => { $("list").textContent = "مش قادر أقرا الرسايل: " + e.code; });
+}
+
+$("f").onsubmit = async e => {
+  e.preventDefault();
+  const text = $("txt").value.trim();
+  const u = auth.currentUser;
+  if (!text || !u) return;
+  $("txt").value = "";
+  try {
+    await addDoc(collection(db, "messages"), {uid: u.uid, name: u.displayName || "مجهول", text, createdAt: serverTimestamp()});
+  } catch (err) { $("txt").value = text; alert("الرسالة ما اتبعتتش: " + err.code); }
+};
+</script>
+</body>
+</html>
