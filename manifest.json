@@ -1,0 +1,19 @@
+{
+  "name": "شات العيلة",
+  "short_name": "شات العيلة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#121a18",
+  "theme_color": "#1f4d45",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
