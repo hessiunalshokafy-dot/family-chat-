@@ -65,11 +65,13 @@ form{display:flex;align-items:center;gap:6px;padding:10px 10px calc(10px + env(s
   <div id="list"><div id="empty">مفيش رسايل لسه. ابدأ إنت. 👋</div></div>
   <form id="f">
     <button type="button" class="tool" id="picBtn" title="صورة">📷</button>
+        <button type="button" class="tool" id="camBtn" title="كاميرا">📸</button>
     <button type="button" class="tool" id="stBtn" title="استيكر">😊</button>
     <input id="txt" type="text" placeholder="اكتب رسالة" autocomplete="off" maxlength="1900">
     <button id="send">إرسال</button>
   </form>
   <input id="pic" type="file" accept="image/*" class="hidden">
+      <input id="cam" type="file" accept="image/*" capture="environment" class="hidden">
   <input id="st" type="file" accept="image/*" class="hidden">
 </section>
 <div id="lb" class="hidden"><img alt=""></div>
@@ -224,6 +226,7 @@ async function shrink(file, max, type) {
 }
 
 $("picBtn").onclick = () => $("pic").click();
+  $("camBtn").onclick = () => $("cam").click();
 $("stBtn").onclick = () => $("st").click();
 
 $("pic").onchange = async e => {
